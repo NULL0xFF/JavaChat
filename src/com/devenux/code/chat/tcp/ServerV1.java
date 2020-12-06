@@ -6,24 +6,33 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.ServerSocket;
 import java.net.Socket;
 
-public class Client {
+/**
+ * @deprecated
+ */
+public class ServerV1 {
 
     // Instance Variables
+    private ServerSocket serverSocket;
     private Socket clientSocket;
     private DataInputStream dataInputStream;
     private DataOutputStream dataOutputStream;
-    private BufferedReader inputStreamReader;
+    private Thread sendThread;
+    private Thread recvThread;
 
     /**
-     * Connect client to server
+     * Server setting
      */
-    private void connect() {
+    private void serverSetting() {
+        // Server socket port 9000
+        // Wait for client socket to be connected;
         try {
-            System.out.println("Trying to connect...");
-            this.clientSocket = new Socket("127.0.0.1", 9000);
-            System.out.println("Connected to Server...");
+            this.serverSocket = new ServerSocket(9000);
+            System.out.println("Waiting for client...");
+            this.clientSocket = this.serverSocket.accept();
+            System.out.println("Client connected.");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -36,6 +45,7 @@ public class Client {
         try {
             this.dataInputStream.close();
             this.dataOutputStream.close();
+            this.serverSocket.close();
             this.clientSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -56,68 +66,92 @@ public class Client {
     }
 
     private void dataSend() {
-        // Create thread and keep send message to server using loop
-        // Exit when input is "!quit"
-        new Thread(new Runnable() {
+        // Create thread and keep send message to client using loop
+        // Exit when input is "/quit"
+        this.sendThread = new Thread(new Runnable() {
+            private BufferedReader inputStreamReader = new BufferedReader(new InputStreamReader(System.in));
 
             @Override
             public void run() {
-                inputStreamReader = new BufferedReader(new InputStreamReader(System.in));
                 while (true) {
                     try {
                         String inputString = inputStreamReader.readLine();
                         if (inputString.compareTo("!quit") == 0) {
-                            System.err.println("!quit detected. Exiting client...");
+                            System.err.println("!quit detected. Exiting server...");
                             closeAll();
                             break;
                         } else
                             dataOutputStream.writeUTF(inputString);
                     } catch (IOException e) {
-                        System.err.println("IOException in sendThread. Exiting client...");
+                        System.err.println("IOException in sendThread. Exiting server...");
                         closeAll();
                         break;
                     }
                 }
             }
-        }).start();
+        });
+        this.sendThread.start();
     }
 
     private void dataRecv() {
-        // Create thread and keep print out server's message using loop
-        // Exit when received the message "!quit"
-        new Thread(new Runnable() {
+        // Create thread and keep print out client's message using loop
+        // Exit when received the message "/quit"
+        this.recvThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 while (true) {
                     try {
                         String outputString = dataInputStream.readUTF();
-                        System.out.println("client: " + outputString);
+                        if (outputString.compareTo("!quit") == 0) {
+                            System.err.println("Client sent !quit. Exiting server...");
+                            closeAll();
+                            break;
+                        } else
+                            System.out.println("client: " + outputString);
                     } catch (EOFException e) {
-                        System.err.println("EOFException in recvThread. Exiting client...");
-                        System.err.printf("Press enter to exit.");
+                        System.err.println("EOFException in recvThread. Exiting server...");
                         closeAll();
                         break;
                     } catch (IOException e) {
-                        System.err.println("IOException in recvThread. Exiting client...");
+                        System.err.println("IOException in recvThread. Exiting server...");
                         closeAll();
                         break;
                     }
                 }
             }
-        }).start();
+        });
+        this.recvThread.start();
     }
 
-    public Client() {
-        this.connect();
+    public void overwatch() {
+        if (this.sendThread.isAlive())
+            try {
+                this.sendThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        if (this.recvThread.isAlive())
+            try {
+                this.recvThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        this.closeAll();
+    }
+
+    public ServerV1() {
+        this.serverSetting();
         this.streamSetting();
         this.dataSend();
         this.dataRecv();
+        // this.overwatch();
     }
 
     /**
      * Main method
      */
     public static void main(String[] args) {
-        new Client();
+        new Server();
     }
+
 }
