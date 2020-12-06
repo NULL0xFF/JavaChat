@@ -151,7 +151,7 @@ public class ServerV1 {
      * Main method
      */
     public static void main(String[] args) {
-        new Server();
+        new ServerV1();
     }
 
 }
